@@ -135,14 +135,12 @@ class YOLODataset(BaseDataset):
         """Returns dictionary of labels for YOLO training."""
         self.label_files = img2label_paths(self.im_files)
         cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
-        # FIXME: rebuilding the cache files all the time
-        # try:
-        #     cache, exists = load_dataset_cache_file(cache_path), True  # attempt to load a *.cache file
-        #     assert cache["version"] == DATASET_CACHE_VERSION  # matches current version
-        #     assert cache["hash"] == get_hash(self.label_files + self.im_files)  # identical hash
-        # except (FileNotFoundError, AssertionError, AttributeError):
-        #     cache, exists = self.cache_labels(cache_path), False  # run cache ops
-        cache, exists = self.cache_labels(cache_path), False  # run cache ops
+        try:
+            cache, exists = load_dataset_cache_file(cache_path), True  # attempt to load a *.cache file
+            assert cache["version"] == DATASET_CACHE_VERSION  # matches current version
+            assert cache["hash"] == get_hash(self.label_files + self.im_files)  # identical hash
+        except (FileNotFoundError, AssertionError, AttributeError):
+            cache, exists = self.cache_labels(cache_path), False  # run cache ops
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupt, total
@@ -282,6 +280,8 @@ class YOLOMultiModalDataset(YOLODataset):
 
 
 class GroundingDataset(YOLODataset):
+    """Handles object detection tasks by loading annotations from a specified JSON file, supporting YOLO format."""
+
     def __init__(self, *args, task="detect", json_file, **kwargs):
         """Initializes a GroundingDataset for object detection, loading annotations from a specified JSON file."""
         assert task == "detect", "`GroundingDataset` only support `detect` task for now!"
@@ -322,7 +322,7 @@ class GroundingDataset(YOLODataset):
                 if box[2] <= 0 or box[3] <= 0:
                     continue
 
-                cat_name = " ".join([img["caption"][t[0]: t[1]] for t in ann["tokens_positive"]])
+                cat_name = " ".join([img["caption"][t[0] : t[1]] for t in ann["tokens_positive"]])
                 if cat_name not in cat2id:
                     cat2id[cat_name] = len(cat2id)
                     texts.append([cat_name])
@@ -431,6 +431,12 @@ class ClassificationDataset:
             self.samples = self.samples[: round(len(self.samples) * args.fraction)]
         self.prefix = colorstr(f"{prefix}: ") if prefix else ""
         self.cache_ram = args.cache is True or str(args.cache).lower() == "ram"  # cache images into RAM
+        if self.cache_ram:
+            LOGGER.warning(
+                "WARNING ⚠️ Classification `cache_ram` training has known memory leak in "
+                "https://github.com/ultralytics/ultralytics/issues/9824, setting `cache_ram=False`."
+            )
+            self.cache_ram = False
         self.cache_disk = str(args.cache).lower() == "disk"  # cache images on hard drive as uncompressed *.npy files
         self.samples = self.verify_images()  # filter out bad images
         self.samples = [list(x) + [Path(x[0]).with_suffix(".npy"), None] for x in self.samples]  # file, index, npy, im
