@@ -206,7 +206,12 @@ class BaseDataset(Dataset):
         b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
         n = min(self.ni, 30)  # extrapolate from 30 random images
         for _ in range(n):
-            im = cv2.imread(random.choice(self.im_files))  # sample image
+            # im = cv2.imread(random.choice(self.im_files))  # sample image
+            # reading image based on the extension ############################
+            rand_file = random.choice(self.im_files)
+            read_func = np.load if Path(rand_file).suffix == '.npy' else cv2.imread
+            im = read_func(rand_file)  # sample image
+            ###################################################################
             ratio = self.imgsz / max(im.shape[0], im.shape[1])  # max(h, w)  # ratio
             b += im.nbytes * ratio**2
         mem_required = b * self.ni / n * (1 + safety_margin)  # GB required to cache dataset into RAM
